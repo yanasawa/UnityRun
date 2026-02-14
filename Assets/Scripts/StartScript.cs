@@ -22,6 +22,9 @@ public class StartScript : MonoBehaviour
     [SerializeField]
     private GameObject startText;
 
+    [SerializeField] 
+    private GameObject rankingText;
+
     [SerializeField]
     private GameObject TutorialText;
 
@@ -55,6 +58,7 @@ public class StartScript : MonoBehaviour
     bool canStart = true;
     bool textCounter = false;
     bool canStageMove = true;
+    bool isRanking = false;
     int textCount = 0;
 
     void Start()
@@ -66,6 +70,7 @@ public class StartScript : MonoBehaviour
         inputField = inputField.GetComponent<InputField>();
 
         pos = GameObject.Find("GeneratePos");
+        isRanking = false;
     }
 
 
@@ -120,14 +125,23 @@ public class StartScript : MonoBehaviour
             if (canStart)
             {
                 startText.SetActive(true);
+                rankingText.SetActive(true);
             }
 
             if (Input.GetKey(KeyCode.S))
             {
+                panel.SetActive(false);
                 titleText.SetActive(false);
                 startText.SetActive(false);
+                rankingText.SetActive(false);
                 canStart = false;
                 input.SetActive(true);
+            }
+
+            if (Input.GetKey(KeyCode.R) && !isRanking)
+            {
+                panel.SetActive(true);
+                StartCoroutine(RankCoroutine());
             }
 
             if (textCounter && textCount <= 7)
@@ -145,6 +159,7 @@ public class StartScript : MonoBehaviour
 
             if (textCount >= 7)
             {
+                panel.SetActive(true);
                 alfa += alfaSpeed;
                 if (alfa >= 1.1f)
                 {
@@ -182,5 +197,29 @@ public class StartScript : MonoBehaviour
     public void InputText()
     {
         playerName = inputField.text;
+    }
+
+    IEnumerator RankCoroutine()
+    {
+        isRanking = true; 
+
+        float duration = 1.0f; 
+        float startAlfa = alfa;
+        float time = 0;
+
+        while (time < duration)
+        {
+            time += Time.deltaTime;
+
+            alfa = Mathf.Lerp(startAlfa, 1.1f, time / duration);
+
+            yield return null; 
+        }
+
+        alfa = 1.1f;
+        
+        yield return new WaitForSeconds(0.5f);
+        
+        SceneManager.LoadScene("Ranking"); 
     }
 }

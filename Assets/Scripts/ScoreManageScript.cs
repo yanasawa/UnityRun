@@ -6,7 +6,20 @@ using UnityEngine.SceneManagement;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
 using System;
-using System.Linq;
+
+
+[System.Serializable]
+public class RankingEntry
+{
+    public int score;
+    public string userName;
+
+    public RankingEntry(int s, string n)
+    {
+        score = s;
+        userName = n;
+    }
+}
 
 public class ScoreManageScript : MonoBehaviour
 {
@@ -23,38 +36,17 @@ public class ScoreManageScript : MonoBehaviour
 
     public Text scoreText;
 
-    //Dictionary<int, string> rank = new Dictionary<int, string>()
-    //  {
-    //    {0, ""},
-    //    {1, ""},
-    //    {2, ""},
-    //    {3, ""},
-    //    {4, ""}
-    //  };
-
-    List<int> saveScore = new List<int>()
-    {
-        0, 0, 0, 0, 0
-    };
-
-    List<string> saveName = new List<string>()
-    {
-        "", "", "", "", ""
-    };
+    // ランキングのリスト
+    private List<RankingEntry> rankingList = new List<RankingEntry>();
+    private string saveKey = "RankingDataKey"; // 保存用のキー
 
     float timer = 0.0f;
 
     private void Awake()
     {
-        //Dictionary<int, string> loadDict = PlayerPrefsUtility.LoadDict<int, string>("DictSaveKey");
-        //rank = PlayerPrefsUtility.LoadDict<int, string>("DictSaveKey");
+        rankingList = PlayerPrefsUtility.LoadList<List<RankingEntry>>(saveKey);
+        
     }
-
-    private void Start()
-    {
-        DontDestroyOnLoad(this);
-    }
-
 
     void Update()
     {
@@ -62,89 +54,60 @@ public class ScoreManageScript : MonoBehaviour
 
         if (timer >= 7.0f)
         {
-            readyText.SetActive(false);
+            if(readyText != null) readyText.SetActive(false);
             PlayerController.canStart = true;
         }
 
-        if (PlayerController.gameOver == false && PlayerController.canStart == true)
+        if (PlayerController.gameOver == false && PlayerController.canStart)
         {
             score += 10 * Time.deltaTime;
-            scoreText.text = "Score : " + score.ToString("f0");
+            if(scoreText != null) scoreText.text = "Score : " + score.ToString("f0");
         }
 
-        if (PlayerController.gameOver == true)
+        if (PlayerController.gameOver)
         {
-            gameOverText.SetActive(true);
-            retryText.SetActive(true);
-            titleText.SetActive(true);
+            if(gameOverText != null) gameOverText.SetActive(true);
+            if(retryText != null) retryText.SetActive(true);
+            if(titleText != null) titleText.SetActive(true);
 
-            if (Input.GetKey(KeyCode.R))
+            // Rキーでリトライ
+            if (Input.GetKeyDown(KeyCode.R))
             {
-                Reset();
+                SaveCurrentScore(); // 保存処理
+                ResetGame();
                 SceneManager.LoadScene(SceneManager.GetActiveScene().name);
             }
 
-            if (Input.GetKey(KeyCode.T))
+            // Tキーでタイトルへ
+            if (Input.GetKeyDown(KeyCode.T))
             {
-                Reset();
+                SaveCurrentScore(); // 保存処理
+                ResetGame();
                 StartScript.isStart = false;
                 SceneManager.LoadScene("Load");
             }
         }
     }
 
-    private void Reset()
+    private void SaveCurrentScore()
     {
-        var savescore = (int)score;
+        int currentScore = (int)score;
+        string currentName = StartScript.playerName;
 
-        for(int i = 0; i <= 4; i++)
+        rankingList.Add(new RankingEntry(currentScore, currentName));
+
+        rankingList.Sort((x, y) => y.score.CompareTo(x.score));
+
+        if (rankingList.Count > 5)
         {
-            if(saveScore[i] <= savescore)
-            {
-                saveScore[i] = savescore;
-                saveName[i] = StartScript.playerName;
-                break;
-            }
+            rankingList.RemoveRange(5, rankingList.Count - 5);
         }
 
-        for (int k = 0; k <= 4; k++)
-        {
-            Debug.Log(saveScore[k]);
-            Debug.Log(saveName[k]);
-        }
+        PlayerPrefsUtility.SaveList(saveKey, rankingList);
+    }
 
-        //var keys = rank.Keys.ToList();
-
-        ////foreach(var i in keys)
-        ////{
-        ////    Debug.Log(i);
-        ////}
-        
-        //foreach (var kv in keys)
-        //{
-        //    if (kv <= savescore)
-        //    { 
-        //        rank[kv] = StartScript.playerName;
-        //        rank[savescore] = rank[kv];
-        //        rank.Remove(kv);
-        //        break;
-        //    }
-        //}
-
-        ////saveDict.OrderByDescending(x => x.Key);
-
-        ////saveDict = rank.OrderByDescending(x => x.Key);
-        ////saveDict.ToDictionary(pair => pair.Key, pair => pair.Value);
-
-        //IOrderedEnumerable<KeyValuePair<int, string>> saveDict = rank.OrderByDescending(x => x.Key);
-        //rank = saveDict.ToDictionary(pair => pair.Key, pair => pair.Value);
-        ////PlayerPrefsUtility.SaveDict<int, string>("DictSaveKey", rank);
-
-        //foreach (KeyValuePair<int, string> item in rank)
-        //{
-        //    Debug.Log("キーは" + item.Key + "です。  バリューは" + item.Value + "です。");
-        //}
-
+    private void ResetGame()
+    {
         score = 0.0f;
         timer = 0.0f;
         PlayerController.canStart = false;
@@ -152,43 +115,53 @@ public class ScoreManageScript : MonoBehaviour
     }
 }
 
+
 public static class PlayerPrefsUtility
 {
-
     //=================================================================================
-    //保存
+    // 汎用的な保存・読み込み (Listや独自のクラス用)
     //=================================================================================
 
     /// <summary>
-    /// ディクショナリーを保存
+    /// オブジェクト（List<T>など）を保存
     /// </summary>
-    public static void SaveDict<Key, Value>(string key, Dictionary<Key, Value> value)
+    public static void SaveList<T>(string key, T obj)
     {
-        string serizlizedDict = Serialize<Dictionary<Key, Value>>(value);
-        PlayerPrefs.SetString(key, serizlizedDict);
+        string serializedObj = Serialize<T>(obj);
+        PlayerPrefs.SetString(key, serializedObj);
+        PlayerPrefs.Save(); 
     }
 
-    //=================================================================================
-    //読み込み
-    //=================================================================================
-
     /// <summary>
-    /// ディクショナリーを読み込み
+    /// オブジェクト（List<T>など）を読み込み
     /// </summary>
-    public static Dictionary<Key, Value> LoadDict<Key, Value>(string key)
+    public static T LoadList<T>(string key) where T : new()
     {
-        //keyがある時だけ読み込む
         if (PlayerPrefs.HasKey(key))
         {
-            string serizlizedDict = PlayerPrefs.GetString(key);
-            return Deserialize<Dictionary<Key, Value>>(serizlizedDict);
+            string serializedObj = PlayerPrefs.GetString(key);
+            return Deserialize<T>(serializedObj);
         }
 
-        return new Dictionary<Key, Value>();
+        return new T(); // キーがない場合は新しいインスタンスを返す
     }
 
     //=================================================================================
-    //シリアライズ、デシリアライズ
+    // 既存のDictionary用
+    //=================================================================================
+    
+    public static void SaveDict<Key, Value>(string key, Dictionary<Key, Value> value)
+    {
+        SaveList(key, value); // 実質同じ処理なのでSaveListに流してもOK
+    }
+
+    public static Dictionary<Key, Value> LoadDict<Key, Value>(string key)
+    {
+        return LoadList<Dictionary<Key, Value>>(key);
+    }
+
+    //=================================================================================
+    // シリアライズ、デシリアライズ
     //=================================================================================
 
     private static string Serialize<T>(T obj)
